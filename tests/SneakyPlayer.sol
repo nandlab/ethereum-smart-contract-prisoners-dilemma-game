@@ -4,23 +4,33 @@ pragma solidity ^0.8.20;
 import "remix_tests.sol"; 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "../contracts/PrisonersDilemmaGame.sol";
+import "./Player.sol";
 import "hardhat/console.sol";
 
 
-contract SneakyPlayer is Ownable, ReentrancyGuard {
-    PrisonersDilemmaGame private prisonersDilemma;
+contract SneakyPlayer is Player {
+    uint ctr;
     
-    constructor(PrisonersDilemmaGame _prisonersDilemma) payable Ownable(msg.sender) {
-        Assert.greaterThan(msg.value + 1, uint(10 ether), "I want 10 ether to play");
-        prisonersDilemma = _prisonersDilemma;
+    constructor(PrisonersDilemmaGame _prisonersDilemma) payable Player(_prisonersDilemma) {}
+
+    function random() private view returns (uint) {
+        return uint(keccak256(abi.encodePacked(
+            block.timestamp, address(this), ctr
+        )));
     }
 
-    function register() external onlyOwner nonReentrant {
-        prisonersDilemma.registerNewPlayer{value: 10 ether}();
-    }
-
-    function playAgainst(address _otherPlayer) external onlyOwner nonReentrant {
-        prisonersDilemma.playAgainst(_otherPlayer);
+    function doAction() external override onlyOwner nonReentrant {
+        // Start by cooperating, then mirror the oppenent's behaviour
+        PrisonersDilemmaGame.Action lastOpponentAction = prisonersDilemma.getPlayerState(opponent).lastAction;
+        PrisonersDilemmaGame.Action action = PrisonersDilemmaGame.Action.Cooperate;
+        if (lastOpponentAction != PrisonersDilemmaGame.Action.None) {
+            action = lastOpponentAction;
+        }
+        // Defect in 10% of the cases, even if the opponent cooperated
+        if (random() % 10 == 0) {
+            action = PrisonersDilemmaGame.Action.Defect;
+        }
+        prisonersDilemma.submitAction(action);
+        ctr++;
     }
 }

@@ -27,23 +27,27 @@ contract PrisonersDilemmaGameTest is Ownable, ReentrancyGuard {
 
         console.log("Creating and registering Tit for Tat player...");
         titForTat = new TitForTatPlayer{value: 10 ether}(prisonersDilemma);
-        Assert.equal(address(titForTat).balance, 10 ether, "Initial Tit for Tat balance should be 10 Ether");
-        titForTat.register();
         Assert.equal(address(titForTat).balance, 0, "Tit for Tat balance should be 0 Ether after registering");
         console.log("Done.");
 
         console.log("Creating and registering Sneaky player...");
         sneaky = new SneakyPlayer{value: 10 ether}(prisonersDilemma);
-        Assert.equal(address(sneaky).balance, 10 ether, "Initial Sneaky balance should be 10 Ether");
-        sneaky.register();
         Assert.equal(address(sneaky).balance, 0, "Sneaky balance should be 0 Ether after registering");
         console.log("Done.");
     }
 
-    /* function titForTatVsSneaky() external onlyOwner nonReentrant {
+    function gameOver() internal view returns (bool) {
+        return prisonersDilemma.getPlayerState(address(titForTat)).opponent != address(sneaky);
+    }
+
+    function titForTatVsSneaky() external onlyOwner nonReentrant {
         console.log("Letting Tit for Tat play against Sneaky...");
         titForTat.playAgainst(address(sneaky));
         sneaky.playAgainst(address(titForTat));
+        /* while (!gameOver()) {
+            titForTat.doAction();
+            sneaky.doAction();
+        } */
         console.log("Done.");
-    } */
+    }
 }
