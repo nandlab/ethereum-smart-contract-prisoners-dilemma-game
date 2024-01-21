@@ -12,10 +12,11 @@ abstract contract Player is Ownable, ReentrancyGuard {
     PrisonersDilemmaGame internal prisonersDilemma;
     address internal opponent;
 
+    receive() external payable {}
+
     constructor(PrisonersDilemmaGame _prisonersDilemma) payable Ownable(msg.sender) {
-        Assert.greaterThan(msg.value + 1, uint(10 ether), "I want 10 ETH to play");
         prisonersDilemma = _prisonersDilemma;
-        prisonersDilemma.registerNewPlayer{value: 10 ether}();
+        prisonersDilemma.registerNewPlayer{value: msg.value}();
     }
 
     function getState() external view returns (PrisonersDilemmaGame.PlayerState memory) {

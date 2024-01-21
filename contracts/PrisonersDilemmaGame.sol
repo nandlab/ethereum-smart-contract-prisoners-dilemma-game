@@ -27,7 +27,7 @@ contract PrisonersDilemmaGame is ReentrancyGuard
     struct PlayerState {
         bool registered;
         uint matchScore;
-        uint totalScore;
+        uint xp;
         address opponent;
         Action action;
         Action lastAction;
@@ -98,7 +98,7 @@ contract PrisonersDilemmaGame is ReentrancyGuard
 
     function registerNewPlayer() external payable nonReentrant {
         require(!playerStates[msg.sender].registered, "You are already registered");
-        require(msg.value == 10 ether, "You have to deposit 10 ETH to register");
+        require(msg.value >= 1 ether, "You have to deposit at least 1 ETH to register");
         players.push(payable(msg.sender));
         playerStates[msg.sender] = PlayerState(true, 0, 0, payable(address(0)), Action.None, Action.None, 0, 0);
     }
@@ -177,17 +177,19 @@ contract PrisonersDilemmaGame is ReentrancyGuard
                     uint val = etherReward > balance ? etherReward : balance;
                     (bool success,) = winner.call{value: val}("");
                     require(success);
+                    console.log("PrisonersDilemmaGame: submitAction(): Ether reward was sent to the winner");
                 }
-                myState.totalScore += myState.matchScore;
+                myState.xp += myState.matchScore;
                 myState.matchScore = 0;
                 myState.opponent = payable(address(0));
                 myState.lastAction = Action.None;
                 myState.round = 0;
-                opponentState.totalScore += opponentState.matchScore;
+                opponentState.xp += opponentState.matchScore;
                 opponentState.matchScore = 0;
                 opponentState.opponent = payable(address(0));
                 opponentState.lastAction = Action.None;
                 opponentState.round = 0;
+                console.log("PrisonersDilemmaGame: submitAction(): Player states finalized");
             }
             else {
                 console.log("PrisonersDilemmaGame: submitAction(): Next round");
