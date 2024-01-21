@@ -20,7 +20,7 @@ abstract contract Player is Ownable, ReentrancyGuard {
     }
 
     function getState() external view returns (PrisonersDilemmaGame.PlayerState memory) {
-        return prisonersDilemma.getPlayerState(msg.sender);
+        return prisonersDilemma.getPlayerState(address(this));
     }
 
     function isInMatch() external view returns (bool) {

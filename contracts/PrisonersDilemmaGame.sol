@@ -12,7 +12,7 @@ import "hardhat/console.sol";
  */
 contract PrisonersDilemmaGame is ReentrancyGuard
 {
-    uint16 public constant MAX_ROUNDS = 15;
+    uint16 public constant MAX_ROUNDS = 25;
 
     enum Action {
         None,
@@ -174,7 +174,7 @@ contract PrisonersDilemmaGame is ReentrancyGuard
                 uint balance = address(this).balance;
                 if (winner != address(0) && balance > 0) {
                     uint etherReward = 0.1 ether;
-                    uint val = etherReward > balance ? etherReward : balance;
+                    uint val = etherReward < balance ? etherReward : balance;
                     (bool success,) = winner.call{value: val}("");
                     require(success);
                     console.log("PrisonersDilemmaGame: submitAction(): Ether reward was sent to the winner");

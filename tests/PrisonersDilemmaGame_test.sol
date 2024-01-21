@@ -71,13 +71,17 @@ contract PrisonersDilemmaGameTest is Ownable, ReentrancyGuard {
         console.logInt(sneakyMatchOutcome);
         Assert.ok(titForTatMatchOutcome == - sneakyMatchOutcome, "The players should be in consensus about the match outcome");
         if (titForTatMatchOutcome > 0) {
-            Assert.equal(titForTatNewBalance - titForTatBalance, 0.1 ether, "TitForTat did not get the expected ETH reward");
+            uint actualReward = titForTatNewBalance - titForTatBalance;
+            console.log("TitForTat got %d Wei", actualReward);
+            Assert.equal(actualReward, 0.1 ether, "TitForTat did not get the expected ETH reward");
         }
         else {
             Assert.equal(titForTatNewBalance, titForTatBalance, "TitForTat's balance should not have changed");
         }
         if (sneakyMatchOutcome > 0) {
-            Assert.equal(sneakyNewBalance - sneakyBalance, 0.1 ether, "Sneaky did not get the expected ETH reward");
+            uint actualReward = sneakyNewBalance - sneakyBalance;
+            console.log("Sneaky got %d Wei", actualReward);
+            Assert.equal(actualReward, 0.1 ether, "Sneaky did not get the expected ETH reward");
         }
         else {
             Assert.equal(sneakyNewBalance, sneakyBalance, "Sneaky's balance should not have changed");
