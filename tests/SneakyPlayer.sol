@@ -20,6 +20,7 @@ contract SneakyPlayer is Player {
     }
 
     function doAction() external override onlyOwner nonReentrant {
+        console.log("SneakyPlayer::doAction() enter");
         // Start by cooperating, then mirror the oppenent's behaviour
         PrisonersDilemmaGame.Action lastOpponentAction = prisonersDilemma.getPlayerState(opponent).lastAction;
         PrisonersDilemmaGame.Action action = PrisonersDilemmaGame.Action.Cooperate;
@@ -30,7 +31,9 @@ contract SneakyPlayer is Player {
         if (random() % 10 == 0) {
             action = PrisonersDilemmaGame.Action.Defect;
         }
+        console.log("SneakyPlayer::doAction() submitting action to game");
         prisonersDilemma.submitAction(action);
         ctr++;
+        console.log("SneakyPlayer::doAction() return");
     }
 }

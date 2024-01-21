@@ -2,6 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "hardhat/console.sol";
+
 
 /**
  * @title PrisonersDilemmaGame
@@ -13,6 +15,10 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
         None,
         Cooperate,
         Defect
+    }
+
+    function actionToString(Action _action) public pure returns (string memory) {
+        return ["None", "Cooperate", "Defect"][uint(_action)];
     }
 
     enum Outcome {
@@ -30,22 +36,31 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
         Action action;
         Action lastAction;
         Outcome lastMatchOutcome;
-        uint ctr;
     }
 
     address[] private players;
     mapping (address => PlayerState) private playerStates;
+    uint private randCounter;
 
     function getPlayerState(address _player) public view returns (PlayerState memory) {
         return playerStates[_player];
     }
 
-    function random(address _playerA, address _playerB) private view returns (uint) {
-        return uint(keccak256(abi.encodePacked(
-            block.timestamp,
-            _playerA, _playerB,
-            playerStates[_playerA].ctr, playerStates[_playerB].ctr
+    function getAllPlayerStates() public view returns (address[] memory, PlayerState[] memory) {
+        PlayerState[] memory playerStatesArray = new PlayerState[](players.length);
+        for (uint i = 0; i < players.length; i++) {
+            playerStatesArray[i] = (playerStates[players[i]]);
+        }
+        return (players, playerStatesArray);
+    }
+
+    function random() private returns (uint rand) {
+        rand = uint(keccak256(abi.encodePacked(
+            block.prevrandao,
+            address(this),
+            randCounter
         )));
+        randCounter++;
     }
 
     function getReward(Action myAction, Action opponentAction) public pure returns(uint8 myReward, uint8 opponentReward) {
@@ -85,17 +100,26 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
     }
 
     function registerNewPlayer() external payable nonReentrant {
-        require(msg.value == 10 ether);
+        require(!playerStates[msg.sender].registered, "You are already registered");
+        require(msg.value == 10 ether, "You have to deposit 10 ETH to register");
         players.push(payable(msg.sender));
-        playerStates[msg.sender] = PlayerState(true, 0, 0, payable(address(0)), Action.None, Action.None, Outcome.None, 0);
+        playerStates[msg.sender] = PlayerState(true, 0, 0, payable(address(0)), Action.None, Action.None, Outcome.None);
+    }
+
+    // Asserts that the user calling this contract is registered and
+    // returns a boolean whether he is currently in a match with another player.
+    function isInMatch() internal view returns (bool) {
+        PlayerState storage myState = playerStates[msg.sender];
+        require(myState.registered, "User not registered");
+        return playerStates[myState.opponent].opponent == msg.sender;
     }
 
     /* The game starts if both players are ready to play against each other */
     function playAgainst(address _otherPlayer) external nonReentrant {
-        PlayerState storage myState = playerStates[msg.sender];
-        require(myState.registered);
-        require(_otherPlayer != address(0) && myState.opponent == address(0) && playerStates[_otherPlayer].registered);
-        myState.opponent = _otherPlayer;
+        require(!isInMatch(), "Cannot change opponent while playing a match");
+        require(_otherPlayer != address(this), "Cannot play against yourself");
+        require(_otherPlayer != address(0) && playerStates[_otherPlayer].registered, "Requested opponent does not exist");
+        playerStates[msg.sender].opponent = _otherPlayer;
     }
 
     /**
@@ -104,14 +128,19 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
      *  After each round there is a 25% possibility that the match is completed.
      */
     function submitAction(Action _action) external nonReentrant {
+        console.log("PrisonersDilemmaGame: submitAction() enter");
+        require(isInMatch(), "Player is not in a match");
         PlayerState storage myState = playerStates[msg.sender];
-        require(myState.registered);
+        require(myState.action == Action.None, "Player has already chosen an action");
         address opponent = myState.opponent;
         PlayerState storage opponentState = playerStates[opponent];
-        require(opponentState.registered && opponentState.opponent == address(this) && opponentState.action == Action.None, "Oponnent state is not appropriate for this action");
         myState.action = _action;
         if (opponentState.action != Action.None) {
+            console.log("PrisonersDilemmaGame: submitAction(): Both players chose an action, evaluate the outcome");
             (uint8 myReward, uint8 opponentReward) = getReward(myState.action, opponentState.action);
+            console.log("PrisonersDilemmaGame: submitAction(): Round result:");
+            console.log("* %s: Action: %s, Reward: %d", msg.sender, actionToString(myState.action), myReward);
+            console.log("* %s: Action: %s, Reward: %d", opponent, actionToString(opponentState.action), opponentReward);
             myState.matchScore += myReward;
             opponentState.matchScore += opponentReward;
             // Round completed, reset actions
@@ -119,31 +148,36 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
             myState.action = Action.None;
             opponentState.lastAction = opponentState.action;
             opponentState.action = Action.None;
-            // With 3/4 probability we continue this match, otherwise it is completed
-            if (random(msg.sender, opponent) % 4 == 0) {
+            // With 1/4 probability the match finishes, otherwise it continues
+            if (random() % 4 == 0) {
+                console.log("PrisonersDilemmaGame: submitAction(): Match is finished");
+                address payable winner;
+                if (myState.matchScore > opponentState.matchScore) {
+                    // I won!
+                    myState.lastMatchOutcome = Outcome.Win;
+                    opponentState.lastMatchOutcome = Outcome.Loose;
+                    winner = payable(msg.sender);
+                    console.log("PrisonersDilemmaGame: submitAction(): The winner is: %s", winner);
+                }
+                else if (myState.matchScore < opponentState.matchScore) {
+                    // Opponent won!
+                    myState.lastMatchOutcome = Outcome.Loose;
+                    opponentState.lastMatchOutcome = Outcome.Win;
+                    winner = payable(opponent);
+                    console.log("PrisonersDilemmaGame: submitAction(): The winner is: %s", winner);
+                }
+                else {
+                    myState.lastMatchOutcome = Outcome.Draw;
+                    opponentState.lastMatchOutcome = Outcome.Draw;
+                    console.log("PrisonersDilemmaGame: submitAction(): Draw");
+                }
                 // The winner gets 0.1 ETH
-                uint etherReward = 0.1 ether;
                 uint balance = address(this).balance;
-                if (balance > 0) {
+                if (winner != address(0) && balance > 0) {
+                    uint etherReward = 0.1 ether;
                     uint val = etherReward > balance ? etherReward : balance;
-                    if (myState.matchScore > opponentState.matchScore) {
-                        // I won!
-                        myState.lastMatchOutcome = Outcome.Win;
-                        opponentState.lastMatchOutcome = Outcome.Loose;
-                        (bool success,) = msg.sender.call{value: val}("");
-                        require(success);
-                    }
-                    else if (myState.matchScore < opponentState.matchScore) {
-                        // Opponent won!
-                        myState.lastMatchOutcome = Outcome.Loose;
-                        opponentState.lastMatchOutcome = Outcome.Win;
-                        (bool success,) = msg.sender.call{value: val}("");
-                        require(success);
-                    }
-                    else {
-                        myState.lastMatchOutcome = Outcome.Draw;
-                        opponentState.lastMatchOutcome = Outcome.Draw;
-                    }
+                    (bool success,) = winner.call{value: val}("");
+                    require(success);
                 }
                 myState.totalScore += myState.matchScore;
                 myState.matchScore = 0;
@@ -154,7 +188,10 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
                 opponentState.opponent = payable(address(0));
                 opponentState.lastAction = Action.None;
             }
+            else {
+                console.log("PrisonersDilemmaGame: submitAction(): Next round");
+            }
         }
-        myState.ctr++;
+        console.log("PrisonersDilemmaGame: submitAction() return");
     }
 }

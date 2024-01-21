@@ -17,23 +17,23 @@ contract PrisonersDilemmaGameTest is Ownable, ReentrancyGuard {
 
     constructor() Ownable(msg.sender) {}
 
-    ///#value: 20000000000000000000
+    ///#value: 30000000000000000000
     function beforeAll() external payable onlyOwner nonReentrant {
         Assert.greaterThan(msg.value + 1, uint(20 ether), "I should get at least 20 Ether");
         console.log("Deploying PrisonersDilemmaGame...");
         prisonersDilemma = new PrisonersDilemmaGame();
+        console.log("Done. PrisonersDilemmaGame address: %s", address(prisonersDilemma));
         Assert.equal(address(prisonersDilemma).balance, 0, "Initial prisonersDilemma balance should be zero");
-        console.log("Done.");
 
         console.log("Creating and registering Tit for Tat player...");
         titForTat = new TitForTatPlayer{value: 10 ether}(prisonersDilemma);
+        console.log("Done. Tit for Tat player address: %s", address(titForTat));
         Assert.equal(address(titForTat).balance, 0, "Tit for Tat balance should be 0 Ether after registering");
-        console.log("Done.");
 
         console.log("Creating and registering Sneaky player...");
         sneaky = new SneakyPlayer{value: 10 ether}(prisonersDilemma);
+        console.log("Done. SneakyPlayer address: %s", address(sneaky));
         Assert.equal(address(sneaky).balance, 0, "Sneaky balance should be 0 Ether after registering");
-        console.log("Done.");
     }
 
     function gameOver() internal view returns (bool) {
@@ -44,10 +44,15 @@ contract PrisonersDilemmaGameTest is Ownable, ReentrancyGuard {
         console.log("Letting Tit for Tat play against Sneaky...");
         titForTat.playAgainst(address(sneaky));
         sneaky.playAgainst(address(titForTat));
-        /* while (!gameOver()) {
+        uint roundNumber = 0;
+        while (!gameOver()) {
+            console.log("Round %d", roundNumber);
+            console.log("Tit for Tat does an action");
             titForTat.doAction();
+            console.log("Sneaky does an action");
             sneaky.doAction();
-        } */
+            roundNumber++;
+        }
         console.log("Done.");
     }
 }
