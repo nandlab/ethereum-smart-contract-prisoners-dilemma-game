@@ -38,11 +38,14 @@ contract PrisonersDilemmaGameTest is Ownable, ReentrancyGuard {
 
     // view keyword is not possible here for some reason
     function matchRunning() internal returns (bool) {
+        console.log("Checking matchRunning");
         Assert.ok(titForTat.isInMatch() == sneaky.isInMatch(), "TitForTat and Sneaky should be in consensus of whether they are both in a match or not");
         return titForTat.isInMatch();
     }
 
     function titForTatVsSneaky() external onlyOwner nonReentrant {
+        uint titForTatBalance = address(titForTat).balance;
+        uint sneakyBalance = address(sneaky).balance;
         console.log("Letting Tit for Tat play against Sneaky...");
         titForTat.playAgainst(address(sneaky));
         sneaky.playAgainst(address(titForTat));
@@ -56,7 +59,23 @@ contract PrisonersDilemmaGameTest is Ownable, ReentrancyGuard {
             console.log("");
             roundNumber++;
         }
-        Assert.ok(titForTat.getState().lastMatchOutcome == - sneaky.getState().lastMatchOutcome, "The players should be in consensus about the match outcome");
+        int8 titForTatMatchOutcome = titForTat.getState().lastMatchOutcome;
+        int8 sneakyMatchOutcome = sneaky.getState().lastMatchOutcome;
+        uint titForTatNewBalance = address(titForTat).balance;
+        uint sneakyNewBalance = address(sneaky).balance;
+        Assert.ok(titForTatMatchOutcome == - sneakyMatchOutcome, "The players should be in consensus about the match outcome");
+        if (titForTatMatchOutcome == 1) {
+            Assert.equal(titForTatNewBalance - titForTatBalance, 0.1 ether, "TitForTat did not get the expected ETH reward");
+        }
+        else {
+            Assert.equal(titForTatNewBalance, titForTatBalance, "TitForTat's balance should not have changed");
+        }
+        if (sneakyMatchOutcome == 1) {
+            Assert.equal(sneakyNewBalance - sneakyBalance, 0.1 ether, "Sneaky did not get the expected ETH reward");
+        }
+        else {
+            Assert.equal(sneakyNewBalance, sneakyBalance, "Sneaky's balance should not have changed");
+        }
         console.log("Done.");
     }
 }

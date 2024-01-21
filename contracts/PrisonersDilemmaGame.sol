@@ -10,7 +10,10 @@ import "hardhat/console.sol";
  * @dev Prisoner's dilemma as a multiplayer game
  * @custom:dev-run-script ./scripts/deploy_with_ethers.ts
  */
-contract PrisonersDilemmaGame is ReentrancyGuard {
+contract PrisonersDilemmaGame is ReentrancyGuard
+{
+    uint16 public constant MAX_ROUNDS = 15;
+
     enum Action {
         None,
         Cooperate,
@@ -29,6 +32,7 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
         Action action;
         Action lastAction;
         int8 lastMatchOutcome; // -1: Lose, 0: Draw, 1: Win
+        uint16 round;
     }
 
     address[] private players;
@@ -96,7 +100,7 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
         require(!playerStates[msg.sender].registered, "You are already registered");
         require(msg.value == 10 ether, "You have to deposit 10 ETH to register");
         players.push(payable(msg.sender));
-        playerStates[msg.sender] = PlayerState(true, 0, 0, payable(address(0)), Action.None, Action.None, 0);
+        playerStates[msg.sender] = PlayerState(true, 0, 0, payable(address(0)), Action.None, Action.None, 0, 0);
     }
 
     // Asserts that the user calling this contract is registered and
@@ -136,13 +140,15 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
             console.log("* %s: Action: %s, Reward: %d", opponent, actionToString(opponentState.action), opponentReward);
             myState.matchScore += myReward;
             opponentState.matchScore += opponentReward;
-            // Round completed, reset actions
+            // Round completed
             myState.lastAction = myState.action;
             myState.action = Action.None;
             opponentState.lastAction = opponentState.action;
             opponentState.action = Action.None;
+            myState.round++;
+            opponentState.round++;
             // With 1/4 probability the match finishes, otherwise it continues
-            if (random() % 4 == 0) {
+            if (myState.round >= MAX_ROUNDS || random() % 4 == 0) {
                 console.log("PrisonersDilemmaGame: submitAction(): Match is finished");
                 address payable winner;
                 if (myState.matchScore > opponentState.matchScore) {
@@ -176,10 +182,12 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
                 myState.matchScore = 0;
                 myState.opponent = payable(address(0));
                 myState.lastAction = Action.None;
+                myState.round = 0;
                 opponentState.totalScore += opponentState.matchScore;
                 opponentState.matchScore = 0;
                 opponentState.opponent = payable(address(0));
                 opponentState.lastAction = Action.None;
+                opponentState.round = 0;
             }
             else {
                 console.log("PrisonersDilemmaGame: submitAction(): Next round");
