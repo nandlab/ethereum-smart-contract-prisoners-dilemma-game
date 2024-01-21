@@ -21,13 +21,6 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
         return ["None", "Cooperate", "Defect"][uint(_action)];
     }
 
-    enum Outcome {
-        None,
-        Win,
-        Loose,
-        Draw
-    }
-
     struct PlayerState {
         bool registered;
         uint matchScore;
@@ -35,7 +28,7 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
         address opponent;
         Action action;
         Action lastAction;
-        Outcome lastMatchOutcome;
+        int8 lastMatchOutcome; // -1: Lose, 0: Draw, 1: Win
     }
 
     address[] private players;
@@ -103,18 +96,18 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
         require(!playerStates[msg.sender].registered, "You are already registered");
         require(msg.value == 10 ether, "You have to deposit 10 ETH to register");
         players.push(payable(msg.sender));
-        playerStates[msg.sender] = PlayerState(true, 0, 0, payable(address(0)), Action.None, Action.None, Outcome.None);
+        playerStates[msg.sender] = PlayerState(true, 0, 0, payable(address(0)), Action.None, Action.None, 0);
     }
 
     // Asserts that the user calling this contract is registered and
     // returns a boolean whether he is currently in a match with another player.
-    function isInMatch() internal view returns (bool) {
+    function isInMatch() public view returns (bool) {
         PlayerState storage myState = playerStates[msg.sender];
         require(myState.registered, "User not registered");
         return playerStates[myState.opponent].opponent == msg.sender;
     }
 
-    /* The game starts if both players are ready to play against each other */
+    // The game starts if both players are ready to play against each other
     function playAgainst(address _otherPlayer) external nonReentrant {
         require(!isInMatch(), "Cannot change opponent while playing a match");
         require(_otherPlayer != address(this), "Cannot play against yourself");
@@ -154,21 +147,21 @@ contract PrisonersDilemmaGame is ReentrancyGuard {
                 address payable winner;
                 if (myState.matchScore > opponentState.matchScore) {
                     // I won!
-                    myState.lastMatchOutcome = Outcome.Win;
-                    opponentState.lastMatchOutcome = Outcome.Loose;
+                    myState.lastMatchOutcome = 1;
+                    opponentState.lastMatchOutcome = -1;
                     winner = payable(msg.sender);
                     console.log("PrisonersDilemmaGame: submitAction(): The winner is: %s", winner);
                 }
                 else if (myState.matchScore < opponentState.matchScore) {
                     // Opponent won!
-                    myState.lastMatchOutcome = Outcome.Loose;
-                    opponentState.lastMatchOutcome = Outcome.Win;
+                    myState.lastMatchOutcome = -1;
+                    opponentState.lastMatchOutcome = 1;
                     winner = payable(opponent);
                     console.log("PrisonersDilemmaGame: submitAction(): The winner is: %s", winner);
                 }
                 else {
-                    myState.lastMatchOutcome = Outcome.Draw;
-                    opponentState.lastMatchOutcome = Outcome.Draw;
+                    myState.lastMatchOutcome = 0;
+                    opponentState.lastMatchOutcome = 0;
                     console.log("PrisonersDilemmaGame: submitAction(): Draw");
                 }
                 // The winner gets 0.1 ETH

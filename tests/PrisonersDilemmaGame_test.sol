@@ -17,7 +17,7 @@ contract PrisonersDilemmaGameTest is Ownable, ReentrancyGuard {
 
     constructor() Ownable(msg.sender) {}
 
-    ///#value: 30000000000000000000
+    ///#value: 20000000000000000000
     function beforeAll() external payable onlyOwner nonReentrant {
         Assert.greaterThan(msg.value + 1, uint(20 ether), "I should get at least 20 Ether");
         console.log("Deploying PrisonersDilemmaGame...");
@@ -27,17 +27,19 @@ contract PrisonersDilemmaGameTest is Ownable, ReentrancyGuard {
 
         console.log("Creating and registering Tit for Tat player...");
         titForTat = new TitForTatPlayer{value: 10 ether}(prisonersDilemma);
-        console.log("Done. Tit for Tat player address: %s", address(titForTat));
+        console.log("Done. TitForTat address: %s", address(titForTat));
         Assert.equal(address(titForTat).balance, 0, "Tit for Tat balance should be 0 Ether after registering");
 
         console.log("Creating and registering Sneaky player...");
         sneaky = new SneakyPlayer{value: 10 ether}(prisonersDilemma);
-        console.log("Done. SneakyPlayer address: %s", address(sneaky));
+        console.log("Done. Sneaky address: %s", address(sneaky));
         Assert.equal(address(sneaky).balance, 0, "Sneaky balance should be 0 Ether after registering");
     }
 
-    function gameOver() internal view returns (bool) {
-        return prisonersDilemma.getPlayerState(address(titForTat)).opponent != address(sneaky);
+    // view keyword is not possible here for some reason
+    function matchRunning() internal returns (bool) {
+        Assert.ok(titForTat.isInMatch() == sneaky.isInMatch(), "TitForTat and Sneaky should be in consensus of whether they are both in a match or not");
+        return titForTat.isInMatch();
     }
 
     function titForTatVsSneaky() external onlyOwner nonReentrant {
@@ -45,14 +47,16 @@ contract PrisonersDilemmaGameTest is Ownable, ReentrancyGuard {
         titForTat.playAgainst(address(sneaky));
         sneaky.playAgainst(address(titForTat));
         uint roundNumber = 0;
-        while (!gameOver()) {
+        while (matchRunning()) {
             console.log("Round %d", roundNumber);
             console.log("Tit for Tat does an action");
             titForTat.doAction();
             console.log("Sneaky does an action");
             sneaky.doAction();
+            console.log("");
             roundNumber++;
         }
+        Assert.ok(titForTat.getState().lastMatchOutcome == - sneaky.getState().lastMatchOutcome, "The players should be in consensus about the match outcome");
         console.log("Done.");
     }
 }

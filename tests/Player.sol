@@ -13,9 +13,17 @@ abstract contract Player is Ownable, ReentrancyGuard {
     address internal opponent;
 
     constructor(PrisonersDilemmaGame _prisonersDilemma) payable Ownable(msg.sender) {
-        Assert.greaterThan(msg.value + 1, uint(10 ether), "I want 10 ether to play");
+        Assert.greaterThan(msg.value + 1, uint(10 ether), "I want 10 ETH to play");
         prisonersDilemma = _prisonersDilemma;
         prisonersDilemma.registerNewPlayer{value: 10 ether}();
+    }
+
+    function getState() external view returns (PrisonersDilemmaGame.PlayerState memory) {
+        return prisonersDilemma.getPlayerState(msg.sender);
+    }
+
+    function isInMatch() external view returns (bool) {
+        return prisonersDilemma.isInMatch();
     }
 
     function playAgainst(address _otherPlayer) external onlyOwner nonReentrant {

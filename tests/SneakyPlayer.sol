@@ -15,7 +15,7 @@ contract SneakyPlayer is Player {
 
     function random() private view returns (uint) {
         return uint(keccak256(abi.encodePacked(
-            block.timestamp, address(this), ctr
+            block.prevrandao, address(this), ctr
         )));
     }
 
@@ -27,7 +27,7 @@ contract SneakyPlayer is Player {
         if (lastOpponentAction != PrisonersDilemmaGame.Action.None) {
             action = lastOpponentAction;
         }
-        // Defect in 10% of the cases, even if the opponent cooperated
+        // Defect in 10% of the rounds as a surprise attack
         if (random() % 10 == 0) {
             action = PrisonersDilemmaGame.Action.Defect;
         }
