@@ -53,10 +53,14 @@ contract PrisonersDilemmaGameTest is Ownable, ReentrancyGuard {
         uint round = 0;
         while (matchRunning()) {
             console.log("Round %d", round);
-            console.log("Tit for Tat does an action");
+            console.log("Tit for Tat submits their action secretly");
             titForTat.doAction();
-            console.log("Sneaky does an action");
+            console.log("Sneaky submits their action secretly");
             sneaky.doAction();
+            console.log("Tit for Tat reveals their action");
+            titForTat.revealAction();
+            console.log("Sneaky reveals their action");
+            sneaky.revealAction();
             console.log("");
             round++;
         }

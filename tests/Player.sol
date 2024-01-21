@@ -12,6 +12,18 @@ abstract contract Player is Ownable, ReentrancyGuard {
     PrisonersDilemmaGame internal prisonersDilemma;
     address internal opponent;
 
+    PrisonersDilemmaGame.Action private chosenAction;
+    uint private pepper;
+    uint private randomCtr;
+
+    function random() private returns (uint) {
+        uint rand = uint(keccak256(abi.encode(
+            block.prevrandao, address(this), randomCtr
+        )));
+        randomCtr++;
+        return rand;
+    }
+
     receive() external payable {}
 
     constructor(PrisonersDilemmaGame _prisonersDilemma) payable Ownable(msg.sender) {
@@ -32,5 +44,20 @@ abstract contract Player is Ownable, ReentrancyGuard {
         prisonersDilemma.playAgainst(opponent);
     }
 
-    function doAction() external virtual;
+    function getActionHash(PrisonersDilemmaGame.Action _action, uint _pepper) private pure returns (uint) {
+        return uint(keccak256(abi.encode(_action, _pepper)));
+    }
+
+    function getAction() internal virtual returns (PrisonersDilemmaGame.Action);
+
+    function doAction() external onlyOwner {
+        chosenAction = getAction();
+        pepper = random();
+        uint actionHash = getActionHash(chosenAction, pepper);
+        prisonersDilemma.submitActionSecretly(actionHash);
+    }
+
+    function revealAction() external onlyOwner {
+        prisonersDilemma.revealAction(chosenAction, pepper);
+    }
 }

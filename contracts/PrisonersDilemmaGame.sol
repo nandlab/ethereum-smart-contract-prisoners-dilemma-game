@@ -29,6 +29,8 @@ contract PrisonersDilemmaGame is ReentrancyGuard
         uint matchScore;
         uint xp;
         address opponent;
+        bool actionSubmittedSecretly;
+        uint actionHash;
         Action action;
         Action lastAction;
         int8 lastMatchOutcome; // -1: Lose, 0: Draw, 1: Win
@@ -100,7 +102,7 @@ contract PrisonersDilemmaGame is ReentrancyGuard
         require(!playerStates[msg.sender].registered, "You are already registered");
         require(msg.value >= 1 ether, "You have to deposit at least 1 ETH to register");
         players.push(payable(msg.sender));
-        playerStates[msg.sender] = PlayerState(true, 0, 0, payable(address(0)), Action.None, Action.None, 0, 0);
+        playerStates[msg.sender] = PlayerState(true, 0, 0, payable(address(0)), false, 0, Action.None, Action.None, 0, 0);
     }
 
     // Asserts that the user calling this contract is registered and
@@ -120,81 +122,106 @@ contract PrisonersDilemmaGame is ReentrancyGuard
     }
 
     /**
-     *  In each round each player has to submit their action.
-     *  The number of rounds is not deterministic.
-     *  After each round there is a 25% possibility that the match is completed.
+     * In each round each player has to submit their action.
+     * Each player first submits a hash of his action and can later reveals it,
+     * when the other player also submitted his action hash.
+     * Therefore one player cannot wait for the opponent to choose an action
+     * and then choose his own action based on the opponent's.
+     * To reveal an action, the action itself and a pepper is sent.
+     * The number of rounds is not deterministic.
+     * After each round there is a 25% possibility that the match is completed.
      */
-    function submitAction(Action _action) external nonReentrant {
-        console.log("PrisonersDilemmaGame: submitAction() enter");
-        require(isInMatch(), "Player is not in a match");
+
+    // The client should hash the action as follows with a secret pepper:
+    // uint(keccak256(abi.encode(action, pepper));
+    function submitActionSecretly(uint actionHash) external nonReentrant {
+        require(isInMatch(), "No match is running");
         PlayerState storage myState = playerStates[msg.sender];
-        require(myState.action == Action.None, "Player has already chosen an action");
+        require(!myState.actionSubmittedSecretly, "Action already submitted");
+        myState.actionHash = actionHash;
+        myState.actionSubmittedSecretly = true;
+    }
+
+    function revealAction(Action _action, uint _pepper) external nonReentrant {
+        PlayerState storage myState = playerStates[msg.sender];
+        require(isInMatch(), "No match is running");
+        require(myState.actionSubmittedSecretly, "No action submitted yet");
+        require(uint(keccak256(abi.encode(_action, _pepper))) == myState.actionHash, "Action with pepper do not match hash");
+        myState.action = _action;
+        // If both players have disclosed their action, the round outcome is evaluated
+        if (playerStates[myState.opponent].action != Action.None) {
+           console.log("PrisonersDilemmaGame: Both players have revealed their action");
+           evaluateRoundOutcome();
+        }
+    }
+
+    function evaluateRoundOutcome() internal {
+        PlayerState storage myState = playerStates[msg.sender];
         address opponent = myState.opponent;
         PlayerState storage opponentState = playerStates[opponent];
-        myState.action = _action;
-        if (opponentState.action != Action.None) {
-            console.log("PrisonersDilemmaGame: submitAction(): Both players chose an action, evaluate the outcome");
-            (uint8 myReward, uint8 opponentReward) = getReward(myState.action, opponentState.action);
-            console.log("PrisonersDilemmaGame: submitAction(): Round result:");
-            console.log("* %s: Action: %s, Reward: %d", msg.sender, actionToString(myState.action), myReward);
-            console.log("* %s: Action: %s, Reward: %d", opponent, actionToString(opponentState.action), opponentReward);
-            myState.matchScore += myReward;
-            opponentState.matchScore += opponentReward;
-            // Round completed
-            myState.lastAction = myState.action;
-            myState.action = Action.None;
-            opponentState.lastAction = opponentState.action;
-            opponentState.action = Action.None;
-            myState.round++;
-            opponentState.round++;
-            // With 1/4 probability the match finishes, otherwise it continues
-            if (myState.round >= MAX_ROUNDS || random() % 4 == 0) {
-                console.log("PrisonersDilemmaGame: submitAction(): Match is finished");
-                address payable winner;
-                if (myState.matchScore > opponentState.matchScore) {
-                    // I won!
-                    myState.lastMatchOutcome = 1;
-                    opponentState.lastMatchOutcome = -1;
-                    winner = payable(msg.sender);
-                    console.log("PrisonersDilemmaGame: submitAction(): The winner is: %s", winner);
-                }
-                else if (myState.matchScore < opponentState.matchScore) {
-                    // Opponent won!
-                    myState.lastMatchOutcome = -1;
-                    opponentState.lastMatchOutcome = 1;
-                    winner = payable(opponent);
-                    console.log("PrisonersDilemmaGame: submitAction(): The winner is: %s", winner);
-                }
-                else {
-                    myState.lastMatchOutcome = 0;
-                    opponentState.lastMatchOutcome = 0;
-                    console.log("PrisonersDilemmaGame: submitAction(): Draw");
-                }
-                // The winner gets 0.1 ETH
-                uint balance = address(this).balance;
-                if (winner != address(0) && balance > 0) {
-                    uint etherReward = 0.1 ether;
-                    uint val = etherReward < balance ? etherReward : balance;
-                    (bool success,) = winner.call{value: val}("");
-                    require(success);
-                    console.log("PrisonersDilemmaGame: submitAction(): Ether reward was sent to the winner");
-                }
-                myState.xp += myState.matchScore;
-                myState.matchScore = 0;
-                myState.opponent = payable(address(0));
-                myState.lastAction = Action.None;
-                myState.round = 0;
-                opponentState.xp += opponentState.matchScore;
-                opponentState.matchScore = 0;
-                opponentState.opponent = payable(address(0));
-                opponentState.lastAction = Action.None;
-                opponentState.round = 0;
-                console.log("PrisonersDilemmaGame: submitAction(): Player states finalized");
+        (uint8 myReward, uint8 opponentReward) = getReward(myState.action, opponentState.action);
+        console.log("PrisonersDilemmaGame: Round result:");
+        console.log("* %s: Action: %s, Reward: %d", msg.sender, actionToString(myState.action), myReward);
+        console.log("* %s: Action: %s, Reward: %d", opponent, actionToString(opponentState.action), opponentReward);
+        myState.matchScore += myReward;
+        opponentState.matchScore += opponentReward;
+        // Round completed
+        myState.actionSubmittedSecretly = false;
+        myState.actionHash = 0;
+        myState.lastAction = myState.action;
+        myState.action = Action.None;
+        opponentState.actionSubmittedSecretly = false;
+        opponentState.actionHash = 0;
+        opponentState.lastAction = opponentState.action;
+        opponentState.action = Action.None;
+        myState.round++;
+        opponentState.round++;
+        // With 1/4 probability the match finishes, otherwise it continues
+        if (myState.round >= MAX_ROUNDS || random() % 4 == 0) {
+            console.log("PrisonersDilemmaGame: Match is finished");
+            address payable winner;
+            if (myState.matchScore > opponentState.matchScore) {
+                // I won!
+                myState.lastMatchOutcome = 1;
+                opponentState.lastMatchOutcome = -1;
+                winner = payable(msg.sender);
+                console.log("PrisonersDilemmaGame: The winner is: %s", winner);
+            }
+            else if (myState.matchScore < opponentState.matchScore) {
+                // Opponent won!
+                myState.lastMatchOutcome = -1;
+                opponentState.lastMatchOutcome = 1;
+                winner = payable(opponent);
+                console.log("PrisonersDilemmaGame: The winner is: %s", winner);
             }
             else {
-                console.log("PrisonersDilemmaGame: submitAction(): Next round");
+                myState.lastMatchOutcome = 0;
+                opponentState.lastMatchOutcome = 0;
+                console.log("PrisonersDilemmaGame: Draw");
             }
+            // The winner gets 0.1 ETH
+            uint balance = address(this).balance;
+            if (winner != address(0) && balance > 0) {
+                uint etherReward = 0.1 ether;
+                uint val = etherReward < balance ? etherReward : balance;
+                (bool success,) = winner.call{value: val}("");
+                require(success);
+                console.log("PrisonersDilemmaGame: Ether reward was sent to the winner");
+            }
+            myState.xp += myState.matchScore;
+            myState.matchScore = 0;
+            myState.opponent = payable(address(0));
+            myState.lastAction = Action.None;
+            myState.round = 0;
+            opponentState.xp += opponentState.matchScore;
+            opponentState.matchScore = 0;
+            opponentState.opponent = payable(address(0));
+            opponentState.lastAction = Action.None;
+            opponentState.round = 0;
+            console.log("PrisonersDilemmaGame: Player states finalized");
         }
-        console.log("PrisonersDilemmaGame: submitAction() return");
+        else {
+            console.log("PrisonersDilemmaGame: Next round");
+        }
     }
 }

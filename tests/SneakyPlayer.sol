@@ -9,18 +9,19 @@ import "hardhat/console.sol";
 
 
 contract SneakyPlayer is Player {
-    uint ctr;
+    uint private sneakyRandomCtr;
     
     constructor(PrisonersDilemmaGame _prisonersDilemma) payable Player(_prisonersDilemma) {}
 
-    function random() private view returns (uint) {
-        return uint(keccak256(abi.encode(
-            block.prevrandao, address(this), ctr
+    function sneakyRandom() private returns (uint) {
+        uint rand = uint(keccak256(abi.encode(
+            block.prevrandao, address(this), prisonersDilemma, sneakyRandomCtr
         )));
+        sneakyRandomCtr++;
+        return rand;
     }
 
-    function doAction() external override onlyOwner nonReentrant {
-        console.log("SneakyPlayer::doAction() enter");
+    function getAction() internal override returns (PrisonersDilemmaGame.Action) {
         // Start by cooperating, then mirror the oppenent's behaviour
         PrisonersDilemmaGame.Action lastOpponentAction = prisonersDilemma.getPlayerState(opponent).lastAction;
         PrisonersDilemmaGame.Action action = PrisonersDilemmaGame.Action.Cooperate;
@@ -28,12 +29,10 @@ contract SneakyPlayer is Player {
             action = lastOpponentAction;
         }
         // Defect in 10% of the rounds as a surprise attack
-        if (random() % 10 == 0) {
+        if (sneakyRandom() % 10 == 0) {
             action = PrisonersDilemmaGame.Action.Defect;
         }
-        console.log("SneakyPlayer::doAction() submitting action to game");
-        prisonersDilemma.submitAction(action);
-        ctr++;
-        console.log("SneakyPlayer::doAction() return");
+        console.log("SneakyPlayer: choosing to %s", prisonersDilemma.actionToString(action));
+        return action;
     }
 }

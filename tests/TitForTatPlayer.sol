@@ -11,16 +11,14 @@ import "hardhat/console.sol";
 contract TitForTatPlayer is Player {
     constructor(PrisonersDilemmaGame _prisonersDilemma) payable Player(_prisonersDilemma) {}
 
-    function doAction() external override onlyOwner nonReentrant {
-        console.log("TitForTatPlayer::doAction() enter");
+    function getAction() internal view override returns (PrisonersDilemmaGame.Action) {
         // Start by cooperating, then mirror the oppenent's behaviour
         PrisonersDilemmaGame.Action action = PrisonersDilemmaGame.Action.Cooperate;
         PrisonersDilemmaGame.Action lastOpponentAction = prisonersDilemma.getPlayerState(opponent).lastAction;
         if (lastOpponentAction != PrisonersDilemmaGame.Action.None) {
             action = lastOpponentAction;
         }
-        console.log("TitForTatPlayer::doAction() submitting action to game");
-        prisonersDilemma.submitAction(action);
-        console.log("TitForTatPlayer::doAction() return");
+        console.log("TitForTat: choosing to %s", prisonersDilemma.actionToString(action));
+        return action;
     }
 }
