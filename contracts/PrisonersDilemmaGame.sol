@@ -52,7 +52,7 @@ contract PrisonersDilemmaGame is ReentrancyGuard
     }
 
     function random() private returns (uint rand) {
-        rand = uint(keccak256(abi.encodePacked(
+        rand = uint(keccak256(abi.encode(
             block.prevrandao,
             address(this),
             randCounter

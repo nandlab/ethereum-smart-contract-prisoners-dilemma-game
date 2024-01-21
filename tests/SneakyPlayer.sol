@@ -14,7 +14,7 @@ contract SneakyPlayer is Player {
     constructor(PrisonersDilemmaGame _prisonersDilemma) payable Player(_prisonersDilemma) {}
 
     function random() private view returns (uint) {
-        return uint(keccak256(abi.encodePacked(
+        return uint(keccak256(abi.encode(
             block.prevrandao, address(this), ctr
         )));
     }
